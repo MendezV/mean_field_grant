@@ -480,15 +480,13 @@ def main() -> int:
     print(Energy_calc, "time for energy calc", e-s)
     
     
-    
+    #the lines of code below minimize the mean field hamiltonian
     M_list=[]
     MZ=0.
-    # TT=np.arange(0.01,0.5,0.02)
     TT=np.linspace(0.01,0.25,10)*BW
-    
+    # TT=[0.001]
     
     for T in TT:
-    # for T in [.001]:
         s=time.time()
         res=minimize(disp.calc_energy_MZ, MZ, args=(T,mu), method='COBYLA')
         e=time.time()
@@ -500,7 +498,8 @@ def main() -> int:
     T=TT/BW
     plt.plot(T,M)
     plt.scatter(T,M)
-    plt.ylim([0,np.max(M)])
+    ml=np.max(M)
+    plt.ylim([0-0.02*ml,ml+0.02*ml])
     
     plt.savefig("MzT2.png")
     plt.close()
