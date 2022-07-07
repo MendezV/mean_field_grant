@@ -7,6 +7,9 @@ import Lattice
 from scipy.interpolate import interp1d
 from scipy.linalg import circulant
 import sys  
+from time import sleep
+from parfor import parfor
+from scipy.optimize import minimize
 
 class Ham():
     def __init__(self, hbvf, latt, rescale=None):
@@ -58,11 +61,30 @@ class Ham():
         
         
         psi=np.zeros([np.size(psi1), 2])+0*1j
-        psi[:,0]=psi1
-        psi[:,1]=psi2
+        psi[:,0]=psi1.flatten()
+        psi[:,1]=psi2.flatten()
 
         
         return np.array([-hk_n,+hk_n ]), psi
+    
+    def eigens2(self, kx,ky, Mz=0):
+        [GM1,GM2]=self.latt.LMvec
+        
+        Mzev=Mz*self.hvkd 
+
+        e1=(GM1+GM2)/3
+        e2=(-2*GM1+GM2)/3
+        e3=(-2*GM2+GM1)/3
+        
+        
+        W3=self.hvkd #0.00375/3  #in ev
+        k=np.array([kx,ky])
+        
+        ee=(np.exp(1j*k@e1)+np.exp(1j*k@e2)+np.exp(1j*k@e3))
+        hk=W3*ee
+        hk_n=np.sqrt( np.abs(hk)**2 +Mzev**2 )
+        
+        return np.array([-hk_n,+hk_n ])
     
     def ExtendE(self,E_k , umklapp):
         Gu=self.latt.Umklapp_List(umklapp)
@@ -117,6 +139,29 @@ class Dispersion():
         
         return [psi_plus,Ene_valley_plus]
     
+    def precompute_E_psi_1v_v2(self,Mz=0):
+        
+        Ene_valley_plus_a=np.empty((0))
+        psi_plus_a=[]
+
+
+        print("starting dispersion ..........")
+        
+        s=time.time()
+        @parfor(range(self.Npoi1bz), (0,), bar=False)
+        def fun(l, mu):
+            E1=self.hpl.eigens2(self.KX1bz[l],self.KY1bz[l],Mz)
+            return E1
+        Ene_valley_plus_a=np.array(fun)
+        e=time.time()
+        print("time to diag over MBZ", e-s)
+        ##relevant wavefunctions and energies for the + valley
+
+        Ene_valley_plus= np.reshape(Ene_valley_plus_a,[self.Npoi1bz,self.nbands])
+
+        
+        return Ene_valley_plus
+
 
     ###########DOS FOR DEBUGGING
 
@@ -128,11 +173,14 @@ class Dispersion():
         for i in range(nbands):
             eps_l.append(np.mean( np.abs( np.diff( Ene_valley_plus[:,i].flatten() )  ) )/2)
         eps_a=np.array(eps_l)
-        eps=np.min(eps_a)*10
+        eps=np.min(eps_a)*5
         print("and epsilon is ...", eps)
         
         mmin=np.min(Ene_valley_plus)
         mmax=np.max(Ene_valley_plus)
+        
+        print("THE BANDWIDTH IS....", mmax-mmin)
+        
         NN=int((mmax-mmin)/eps)+int((int((mmax-mmin)/eps)+1)%2) #making sure there is a bin at zero energy
         binn=np.linspace(mmin,mmax,NN+1)
         valt=np.zeros(NN)
@@ -145,7 +193,7 @@ class Dispersion():
         bins=(binn[:-1]+binn[1:])/2
         
         
-        valt=2*valt
+        valt=valt
         f2 = interp1d(binn[:-1],valt, kind='cubic')
         de=(bins[1]-bins[0])
         print("sum of the hist, normed?", np.sum(valt)*de)
@@ -353,15 +401,16 @@ class Dispersion():
             return np.heaviside(-e,0.5)
         
     
-    def calc_energy_MZ(self,T, mu, MZ):
+    def calc_energy_MZ(self,MZ,T, mu):
         T_ev=T*self.hpl.hvkd 
         mu_ev=mu*self.hpl.hvkd 
         U=3*self.hpl.hvkd  #to reproduce liang-fu;s calculation
-        [psi_plus,Ene_valley_plus_dos]=self.precompute_E_psi_1v(MZ)
+        # [ppp,Ene_valley_plus_dos]=self.precompute_E_psi_1v(MZ)
+        Ene_valley_plus_dos=self.precompute_E_psi_1v_v2(MZ)
         [earr, dos_arr, f2 ]=self.DOS(Ene_valley_plus_dos)
         de=earr[1]-earr[0]
         inte=np.trapz(dos_arr*earr*self.nf(earr-mu_ev,T_ev))*de +(MZ*self.hpl.hvkd )**2 /U
-        
+        print(MZ, inte)
         plt.plot(earr, dos_arr)
         plt.scatter(earr, dos_arr, s=1)
         plt.savefig("dos1.png")
@@ -401,7 +450,8 @@ def main() -> int:
     latt=Lattice.TriangLattice(Nsamp,0)
     
     #parameters for the bandstructure
-    hbvf = 2.1354; # eV
+    hbvf = 1#2.1354; # eV
+    BW=6
     print("hbvf is ..",hbvf )
     
     #generating the dispersion 
@@ -420,18 +470,44 @@ def main() -> int:
     print("CHEMICAL POTENTIAL AND FILLING", mu, filling)
     print(mu_values,fillings)
     
-    MZ=0.2
-    T=0.15
-    mus=[0, 0.005,0.01,0.02, 0.025, 0.03]
+    MZ=0.0
+    T=.15
+    mu=0
+    fills=[0, 0.005,0.01,0.02, 0.025, 0.03]
     s=time.time()
-    Energy_calc=disp.calc_energy_MZ(T, mu, MZ)
+    Energy_calc=disp.calc_energy_MZ(MZ,T, mu, )
     e=time.time()
     print(Energy_calc, "time for energy calc", e-s)
     
     
-
+    
+    M_list=[]
+    MZ=0.
+    # TT=np.arange(0.01,0.5,0.02)
+    TT=np.linspace(0.01,0.25,10)*BW
+    
+    
+    for T in TT:
+    # for T in [.001]:
+        s=time.time()
+        res=minimize(disp.calc_energy_MZ, MZ, args=(T,mu), method='COBYLA')
+        e=time.time()
+        MZ=res.x
+        M_list.append(MZ)
+        print(T,MZ,disp.calc_energy_MZ( MZ,T, mu, ), "time for minimization", e-s)
+    
+    M=np.array(M_list)/2
+    T=TT/BW
+    plt.plot(T,M)
+    plt.scatter(T,M)
+    plt.ylim([0,np.max(M)])
+    
+    plt.savefig("MzT2.png")
+    plt.close()
+    
     
 
+            
 if __name__ == '__main__':
     import sys
     sys.exit(main())  # next section explains the use of sys.exit
