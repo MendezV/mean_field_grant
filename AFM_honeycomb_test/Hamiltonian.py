@@ -9,7 +9,7 @@ from scipy.linalg import circulant
 import sys  
 
 class Ham():
-    def __init__(self, hbvf, latt, rescale=None, mu=0, Mz=0.2):
+    def __init__(self, hbvf, latt, rescale=None):
         if rescale is None:
             self.rescale = 1
         else:
@@ -17,8 +17,6 @@ class Ham():
         
         self.hvkd = self.rescale*hbvf
         self.latt=latt
-        self.mu=mu*self.hvkd
-        self.Mz=Mz*self.hvkd
         
         
         
@@ -28,8 +26,10 @@ class Ham():
 
     # METHODS FOR CALCULATING THE DISPERSION
     
-    def eigens(self, kx,ky):
+    def eigens(self, kx,ky, Mz=0):
         [GM1,GM2]=self.latt.LMvec
+        
+        Mzev=Mz*self.hvkd 
 
         e1=(GM1+GM2)/3
         e2=(-2*GM1+GM2)/3
@@ -41,15 +41,15 @@ class Ham():
         
         ee=(np.exp(1j*k@e1)+np.exp(1j*k@e2)+np.exp(1j*k@e3))
         hk=W3*ee
-        hk_n=np.sqrt( np.abs(hk)**2 +self.Mz**2 )
+        hk_n=np.sqrt( np.abs(hk)**2 +Mzev**2 )
         
         #wavefunctions
-        invsqrt=np.sqrt( 1/2 - self.Mz/(2*hk_n) )
-        subsM=self.Mz-hk_n
+        invsqrt=np.sqrt( 1/2 - Mzev/(2*hk_n) )
+        subsM=Mzev-hk_n
         sqrt2=np.sqrt(2)
         vup_1=invsqrt*subsM/(hk*sqrt2)
         vup_2=invsqrt
-        vdown_1=np.conj(hk)/(sqrt2*(self.Mz*subsM+np.abs(hk)**2 ))
+        vdown_1=np.conj(hk)/(sqrt2*(Mzev*subsM+np.abs(hk)**2 ))
         vdown_2=invsqrt
         
         # print(k@e1,k@e2,k@e3,hk_n, 2*np.pi*1/3)
@@ -62,7 +62,7 @@ class Ham():
         psi[:,1]=psi2
 
         
-        return np.array([self.mu-hk_n,self.mu+hk_n ]), psi
+        return np.array([-hk_n,+hk_n ]), psi
     
     def ExtendE(self,E_k , umklapp):
         Gu=self.latt.Umklapp_List(umklapp)
@@ -91,7 +91,7 @@ class Dispersion():
         self.latt=latt
     
     
-    def precompute_E_psi_1v(self):
+    def precompute_E_psi_1v(self,Mz=0):
     
         Ene_valley_plus_a=np.empty((0))
         psi_plus_a=[]
@@ -102,7 +102,7 @@ class Dispersion():
         s=time.time()
         
         for l in range(self.Npoi1bz):
-            E1,wave1=self.hpl.eigens(self.KX1bz[l],self.KY1bz[l])
+            E1,wave1=self.hpl.eigens(self.KX1bz[l],self.KY1bz[l],Mz=0)
             Ene_valley_plus_a=np.append(Ene_valley_plus_a,E1)
             psi_plus_a.append(wave1)
 
@@ -209,6 +209,7 @@ class Dispersion():
                 return None
         return (a_n + b_n)/2
 
+
     def chem_for_filling(self, fill, f2, earr):
         
         NN=10000
@@ -246,6 +247,7 @@ class Dispersion():
                 print("TOO MUCH ERROR IN THE FILLING CALCULATION") 
             
         return [mu, nfil, mus,nn]
+    
     
     def mu_filling_array(self, Nfil, read, write, calculate):
         
@@ -302,11 +304,9 @@ class Dispersion():
     ### FERMI SURFACE ANALYSIS
 
 
-    def High_symmetry(self):
+    def High_symmetry(self,Mz=0):
         Ene_valley_plus_a=np.empty((0))
-        Ene_valley_min_a=np.empty((0))
         psi_plus_a=[]
-        psi_min_a=[]
 
         nbands=self.nbands
         kpath=self.latt.High_symmetry_path()
@@ -315,35 +315,58 @@ class Dispersion():
         for l in range(Npoi):
             # h.umklapp_lattice()
             # break
-            E1p,wave1p=self.hpl.eigens(kpath[l,0],kpath[l,1])
+            E1p,wave1p=self.hpl.eigens(kpath[l,0],kpath[l,1],Mz=0)
             Ene_valley_plus_a=np.append(Ene_valley_plus_a,E1p)
             psi_plus_a.append(wave1p)
 
 
-            E1m,wave1m=self.hmin.eigens(kpath[l,0],kpath[l,1])
-            Ene_valley_min_a=np.append(Ene_valley_min_a,E1m)
-            psi_min_a.append(wave1m)
-
         Ene_valley_plus= np.reshape(Ene_valley_plus_a,[Npoi,nbands])
-        Ene_valley_min= np.reshape(Ene_valley_min_a,[Npoi,nbands])
-
     
-
         print("the shape of the energy array is",np.shape(Ene_valley_plus))
         qa=np.linspace(0,1,Npoi)
         for i in range(nbands):
             plt.plot(qa,Ene_valley_plus[:,i] , c='b')
-            plt.plot(qa,Ene_valley_min[:,i] , c='r', ls="--")
         plt.xlim([0,1])
         # plt.ylim([-0.009,0.009])
         plt.savefig("highsym.png")
         plt.close()
-        return [Ene_valley_plus, Ene_valley_min]
+        return [Ene_valley_plus]
     
-    def calc_energy(self,dos_arr, earr,T, mu):
+    
+    #energy calculation
+    
+    def nf(self, e, T):
+        
+        """[summary]
+        fermi occupation function with a truncation if the argument exceeds 
+        double precission
+
+        Args:
+            e ([double]): [description] energy
+            T ([double]): [description] temperature
+
+        Returns:
+            [double]: [description] value of the fermi function 
+        """
+        Tp=T+1e-17 #To capture zero temperature
+        rat=np.abs(np.max(e/Tp))
+        
+        if rat<700:
+            return 1/(1+np.exp( e/T ))
+        else:
+            return np.heaviside(-e,0.5)
+        
+    
+    def calc_energy_MZ(self,T, mu, MZ):
+        T_ev=T*self.hpl.hvkd 
+        mu_ev=mu*self.hpl.hvkd 
+        U=3*self.hpl.hvkd  #to reproduce liang-fu;s calculation
+        [psi_plus,Ene_valley_plus_dos]=self.precompute_E_psi_1v(MZ)
+        [earr, dos_arr, f2 ]=self.DOS(Ene_valley_plus_dos)
         de=earr[1]-earr[0]
-        inte=np.trapz(dos_arr*earr*self.nf(earr,T, mu))*de
+        inte=np.trapz(dos_arr*earr*self.nf(earr-mu_ev,T_ev))*de +(MZ*self.hpl.hvkd )**2 /U
         return inte
+    
 
 
 def main() -> int:
@@ -394,6 +417,14 @@ def main() -> int:
     mu=mu_values[filling_index]
     filling=fillings[filling_index]
     print("CHEMICAL POTENTIAL AND FILLING", mu, filling)
+    
+    MZ=0.2
+    T=0.15
+    s=time.time()
+    Energy_calc=disp.calc_energy_MZ(T, mu, MZ)
+    e=time.time()
+    print(Energy_calc, "time for energy calc", e-s)
+    
     
 
     
