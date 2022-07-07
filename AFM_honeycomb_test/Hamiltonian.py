@@ -89,6 +89,8 @@ class Dispersion():
         [self.KX1bz, self.KY1bz]=latt.Generate_lattice()
         self.Npoi1bz=np.size(self.KX1bz)
         self.latt=latt
+        
+        self.maxfil=4
     
     
     def precompute_E_psi_1v(self,Mz=0):
@@ -102,7 +104,7 @@ class Dispersion():
         s=time.time()
         
         for l in range(self.Npoi1bz):
-            E1,wave1=self.hpl.eigens(self.KX1bz[l],self.KY1bz[l],Mz=0)
+            E1,wave1=self.hpl.eigens(self.KX1bz[l],self.KY1bz[l],Mz)
             Ene_valley_plus_a=np.append(Ene_valley_plus_a,E1)
             psi_plus_a.append(wave1)
 
@@ -148,12 +150,6 @@ class Dispersion():
         de=(bins[1]-bins[0])
         print("sum of the hist, normed?", np.sum(valt)*de)
         
-        plt.plot(bins,valt)
-        plt.scatter(bins,valt, s=1)
-        plt.savefig("dos1.png")
-        plt.close()
-        
-
         return [bins,valt,f2 ]
     
     def bisection(self,f,a,b,N):
@@ -227,7 +223,7 @@ class Dispersion():
             ndens.append(N)
             
         nn=np.array(ndens)
-        nn=8*(nn/nn[-1])  - 4
+        nn=self.maxfil*(nn/nn[-1])  - self.maxfil/2
 
 
 
@@ -251,7 +247,7 @@ class Dispersion():
     
     def mu_filling_array(self, Nfil, read, write, calculate):
         
-        fillings=np.linspace(0,3.9,Nfil)
+        fillings=np.linspace(0,self.maxfil/2-0.05*self.maxfil,Nfil)
         
         if calculate:
             [psi_plus,Ene_valley_plus_dos]=self.precompute_E_psi_1v()
@@ -365,6 +361,11 @@ class Dispersion():
         [earr, dos_arr, f2 ]=self.DOS(Ene_valley_plus_dos)
         de=earr[1]-earr[0]
         inte=np.trapz(dos_arr*earr*self.nf(earr-mu_ev,T_ev))*de +(MZ*self.hpl.hvkd )**2 /U
+        
+        plt.plot(earr, dos_arr)
+        plt.scatter(earr, dos_arr, s=1)
+        plt.savefig("dos1.png")
+        plt.close()
         return inte
     
 
@@ -411,15 +412,17 @@ def main() -> int:
     
     #CALCULATING FILLING AND CHEMICAL POTENTIAL ARRAYS
     disp=Dispersion( latt, nbands, h, h)
-    Nfils=20
+    Nfils=5
     [fillings,mu_values]=disp.mu_filling_array(Nfils, False, False, True) #read write calculate
     filling_index=int(sys.argv[1]) 
     mu=mu_values[filling_index]
     filling=fillings[filling_index]
     print("CHEMICAL POTENTIAL AND FILLING", mu, filling)
+    print(mu_values,fillings)
     
     MZ=0.2
     T=0.15
+    mus=[0, 0.005,0.01,0.02, 0.025, 0.03]
     s=time.time()
     Energy_calc=disp.calc_energy_MZ(T, mu, MZ)
     e=time.time()
