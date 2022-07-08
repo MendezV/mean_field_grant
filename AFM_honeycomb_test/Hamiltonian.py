@@ -557,7 +557,7 @@ def main() -> int:
     #the lines of code below minimize the mean field hamiltonian
     M_list=[]
     MZ=0.
-    TT=np.linspace(0.01,0.25,10)*BW
+    TT=np.linspace(0.01,0.7,20)*BW
     # TT=[0.001]
     
     for T in TT:
@@ -575,7 +575,7 @@ def main() -> int:
     ml=np.max(M)
     plt.ylim([0-0.02*ml,ml+0.02*ml])
     
-    plt.savefig("MzT2.png")
+    plt.savefig("MzT2_7BW.png")
     plt.close()
     
     
