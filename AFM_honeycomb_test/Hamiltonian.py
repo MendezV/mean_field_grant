@@ -153,6 +153,12 @@ class Dispersion():
             E1=self.hpl.eigens2(self.KX1bz[l],self.KY1bz[l],Mz)
             return E1
         Ene_valley_plus_a=np.array(fun)
+        
+        # for l in range(self.Npoi1bz):
+        #     E1=self.hpl.eigens2(self.KX1bz[l],self.KY1bz[l],Mz)
+        #     Ene_valley_plus_a=np.append(Ene_valley_plus_a,E1)
+
+        
         e=time.time()
         print("time to diag over MBZ", e-s)
         ##relevant wavefunctions and energies for the + valley
@@ -193,14 +199,14 @@ class Dispersion():
         bins=(binn[:-1]+binn[1:])/2
         
         
-        valt=valt
+        valt=2*valt
         f2 = interp1d(binn[:-1],valt, kind='cubic')
         de=(bins[1]-bins[0])
         print("sum of the hist, normed?", np.sum(valt)*de)
         
         return [bins,valt,f2 ]
     
-    def bisection(self,f,a,b,N):
+    def bisection(self,f,a,b,N, *args):
         '''Approximate solution of f(x)=0 on interval [a,b] by bisection method.
 
         Parameters
@@ -231,18 +237,18 @@ class Dispersion():
         >>> bisection(f,0,1,10)
         0.5
         '''
-        if f(a)*f(b) >= 0:
-            print("Bisection method fails.")
+        if f(a,*args)*f(b,*args) >= 0:
+            print("Bisection method fails.",f(a,*args),f(b,*args))
             return None
         a_n = a
         b_n = b
         for n in range(1,N+1):
             m_n = (a_n + b_n)/2
-            f_m_n = f(m_n)
-            if f(a_n)*f_m_n < 0:
+            f_m_n = f(m_n,*args)
+            if f(a_n,*args)*f_m_n < 0:
                 a_n = a_n
                 b_n = m_n
-            elif f(b_n)*f_m_n < 0:
+            elif f(b_n,*args)*f_m_n < 0:
                 a_n = m_n
                 b_n = b_n
             elif f_m_n == 0:
@@ -291,6 +297,8 @@ class Dispersion():
                 print("TOO MUCH ERROR IN THE FILLING CALCULATION") 
             
         return [mu, nfil, mus,nn]
+    
+    
     
     
     def mu_filling_array(self, Nfil, read, write, calculate):
@@ -417,6 +425,71 @@ class Dispersion():
         plt.close()
         return inte
     
+    
+    
+    def calc_filling_args_MZ(self,mu, MZ,T, earr, dos_arr):
+        T_ev=T*self.hpl.hvkd 
+        mu_ev=mu*self.hpl.hvkd 
+        de=earr[1]-earr[0]
+        inte=np.trapz(dos_arr*self.nf(earr-mu_ev,T_ev))*de
+        # print(MZ, inte)
+   
+        return inte-self.maxfil/2
+    
+    
+    def chem_for_filling_lin(self, fill, earr, dos_arr,MZ,T):
+        
+        
+        # n=[]
+        # for e in earr:
+        #     ff=self.calc_filling_args_MZ(e, MZ,T, earr, dos_arr)
+        #     n.append(ff)
+        
+        @parfor(earr, (0,), bar=False)
+        def fun(e, mu):
+            ff=self.calc_filling_args_MZ(e, MZ,T, earr, dos_arr)
+            return ff
+        n=np.array(fun)
+        
+        # mine=earr[1]
+        # maxe=earr[-2]
+        # mu=self.bisection(self.calc_filling_args_MZ,mine,maxe,50, MZ, T, earr, dos_arr)
+        
+        mu_ind=np.argmin((np.array(n)-fill)**2)
+        mu=earr[mu_ind]
+        nfil=self.calc_filling_args_MZ(mu, MZ,T, earr, dos_arr)
+        if fill==0.0:
+            mu=0.0
+            nfil=0.0
+         
+        if fill>0:
+            errfil=abs((nfil-fill)/fill)
+            print(errfil, "error in filling")
+            if errfil>0.1:
+                print("TOO MUCH ERROR IN THE FILLING CALCULATION") 
+            
+        return [mu, nfil]
+    
+    def calc_energy_MZ_fixed_filling(self,MZ,T, fil):
+        T_ev=T*self.hpl.hvkd 
+        U=3*self.hpl.hvkd  #to reproduce liang-fu;s calculation
+        Ene_valley_plus_dos=self.precompute_E_psi_1v_v2(MZ)
+        [earr, dos_arr, f2 ]=self.DOS(Ene_valley_plus_dos)
+        
+        
+        [mu_ev, nfil]=self.chem_for_filling_lin( fil, earr, dos_arr,MZ, T_ev)
+        
+            
+        print("the filling is actually",nfil,fil)
+        de=earr[1]-earr[0]
+        inte=np.trapz(dos_arr*earr*self.nf(earr-mu_ev,T_ev))*de +(MZ*self.hpl.hvkd )**2 /U
+        print(MZ, inte)
+        plt.plot(earr, dos_arr)
+        plt.scatter(earr, dos_arr, s=1)
+        plt.savefig("dos1.png")
+        plt.close()
+        return inte
+    
 
 
 def main() -> int:
@@ -480,31 +553,55 @@ def main() -> int:
     print(Energy_calc, "time for energy calc", e-s)
     
     
+    # #the lines of code below minimize the mean field hamiltonian
+    # M_list=[]
+    # MZ=0.
+    # TT=np.linspace(0.01,0.25,10)*BW
+    # # TT=[0.001]
+    
+    # for T in TT:
+    #     s=time.time()
+    #     res=minimize(disp.calc_energy_MZ, MZ, args=(T,mu), method='COBYLA')
+    #     e=time.time()
+    #     MZ=res.x
+    #     M_list.append(MZ)
+    #     print(T,MZ,disp.calc_energy_MZ( MZ,T, mu, ), "time for minimization", e-s)
+    
+    # M=np.array(M_list)/BW
+    # T=TT/BW
+    # plt.plot(T,M)
+    # plt.scatter(T,M)
+    # ml=np.max(M)
+    # plt.ylim([0-0.02*ml,ml+0.02*ml])
+    
+    # plt.savefig("MzT2.png")
+    # plt.close()
+    
+    
+    
     #the lines of code below minimize the mean field hamiltonian
     M_list=[]
     MZ=0.
     TT=np.linspace(0.01,0.25,10)*BW
-    # TT=[0.001]
+    fil=1
     
     for T in TT:
         s=time.time()
-        res=minimize(disp.calc_energy_MZ, MZ, args=(T,mu), method='COBYLA')
+        res=minimize(disp.calc_energy_MZ_fixed_filling, MZ, args=(T,fil), method='COBYLA', options={'maxit':20})
         e=time.time()
         MZ=res.x
         M_list.append(MZ)
-        print(T,MZ,disp.calc_energy_MZ( MZ,T, mu, ), "time for minimization", e-s)
+        print(T,MZ,disp.calc_energy_MZ_fixed_filling(MZ,T, fil), "time for minimization", e-s)
     
-    M=np.array(M_list)/2
+    M=np.array(M_list)/BW
     T=TT/BW
     plt.plot(T,M)
     plt.scatter(T,M)
     ml=np.max(M)
     plt.ylim([0-0.02*ml,ml+0.02*ml])
     
-    plt.savefig("MzT2.png")
+    plt.savefig("MzT2fixed.png")
     plt.close()
-    
-    
 
             
 if __name__ == '__main__':
