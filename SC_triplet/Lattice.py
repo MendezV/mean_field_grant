@@ -80,10 +80,10 @@ class SquareLattice:
 
         #initial grid that will be filtered
         LP=self.Npoints
-        nn1=np.arange(-LP,LP+1,1)*np.pi/LP
-        nn2=np.arange(-LP,LP+1,1)*np.pi/LP
+        nn1=np.arange(-LP//2,LP//2,1)*2*np.pi/LP
+        nn2=np.arange(-LP//2,LP//2,1)*2*np.pi/LP
 
-        nn_1,nn_2=np.meshgrid(nn1,nn2)
+        KX,KY=np.meshgrid(nn1,nn2)
         
         return [KX,KY]
     
@@ -100,20 +100,19 @@ class SquareLattice:
         
     def High_symmetry_path(self):
         [GM1,GM2]=self.GMvec
-        VV, Gamma, K, Kp, M, Mp=self.FBZ_points(GM1,GM2)
+        VV, Gamma, M,X=self.FBZ_points(GM1,GM2)
         VV=np.array(VV+[VV[0]]) #verices
 
         L=[]
-        # L=L+[K[0]]+[Gamma]+[M[0]]+[Kp[-1]] ##path in reciprocal space
-        L=L+[K[0]]+[Gamma]+[M[0]]+[K[0]] ##path in reciprocal space Andrei paper
+        L=L+[Gamma]+[M[0]]+[X[0]]+[Gamma] ##path in reciprocal space Andrei paper
 
         Nt_points=40
         kp_path=self.linpam(L,Nt_points)
         
-        # plt.scatter(kp_path[:,0],kp_path[:,1])
-        # plt.plot(VV[:,0], VV[:,1])
-        # plt.savefig("highSpath.png")
-        # plt.close()
+        plt.scatter(kp_path[:,0],kp_path[:,1])
+        plt.plot(VV[:,0], VV[:,1])
+        plt.savefig("highSpath.png")
+        plt.close()
         
 
         if self.normed==0:
@@ -127,7 +126,7 @@ class SquareLattice:
     
     def boundary(self):
         [GM1,GM2]=self.GMvec
-        Vertices_list, Gamma, K, Kp, M, Mp=self.FBZ_points(GM1,GM2)
+        Vertices_list, Gamma, M,X=self.FBZ_points(GM1,GM2)
 
         if self.normed==0:
             Gnorm=1
@@ -155,3 +154,16 @@ class SquareLattice:
         b_2=np.array([LM2[0],LM2[1],0]) # Moire reciprocal lattice vect extended
         Vol_rec=np.cross(b_1,b_2)@zhat
         return Vol_rec
+    
+def main() -> int:
+    Npoints=100
+    sq=SquareLattice( Npoints,  0)
+    [KX,KY]=sq.Generate_lattice()
+    plt.scatter(KX,KY)
+    plt.show()
+    k=sq.High_symmetry_path()
+    return 0
+
+if __name__ == '__main__':
+    import sys
+    sys.exit(main())  # next section explains the use of sys.exit

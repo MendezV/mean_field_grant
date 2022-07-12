@@ -21,14 +21,13 @@ class Ham():
         
         self.hvkd = self.rescale*hbvf
         self.latt=latt
-        
-        
-        
+            
     def __repr__(self):
         return "Hamiltonian with alpha parameter {alpha} and scale {hvkd}".format( alpha =self.alpha,hvkd=self.hvkd)
 
-
-    # METHODS FOR CALCULATING THE DISPERSION
+    #######################################################
+    ########### METHODS FOR CALCULATING THE DISPERSION
+    #######################################################
     
     def eigens(self, kx,ky, Mz=0):
         [GM1,GM2]=self.latt.LMvec
@@ -96,7 +95,6 @@ class Ham():
             
         return np.vstack(Elist)
 
-
 class Dispersion():
     
     def __init__(self, latt, nbands, hpl, hmin):
@@ -114,7 +112,6 @@ class Dispersion():
         self.latt=latt
         
         self.maxfil=4
-    
     
     def precompute_E_psi_1v(self,Mz=0):
     
@@ -169,8 +166,9 @@ class Dispersion():
         
         return Ene_valley_plus
 
-
-    ###########DOS FOR DEBUGGING
+    #################################
+    ###########DOS and filling
+    ################################# 
 
     def DOS(self,Ene_valley_plus_pre):
         Ene_valley_plus=Ene_valley_plus_pre
@@ -260,7 +258,6 @@ class Dispersion():
                 return None
         return (a_n + b_n)/2
 
-
     def chem_for_filling(self, fill, f2, earr):
         
         NN=10000
@@ -298,10 +295,7 @@ class Dispersion():
                 print("TOO MUCH ERROR IN THE FILLING CALCULATION") 
             
         return [mu, nfil, mus,nn]
-    
-    
-    
-    
+       
     def mu_filling_array(self, Nfil, read, write, calculate):
         
         fillings=np.linspace(0,self.maxfil/2-0.05*self.maxfil,Nfil)
@@ -354,9 +348,10 @@ class Dispersion():
         
         return [earr, dos]
 
-    ### FERMI SURFACE ANALYSIS
-
-
+    #################################
+    ########### FERMI SURFACE ANALYSIS
+    #################################
+    
     def High_symmetry(self,Mz=0):
         Ene_valley_plus_a=np.empty((0))
         psi_plus_a=[]
@@ -385,8 +380,9 @@ class Dispersion():
         plt.close()
         return [Ene_valley_plus]
     
-    
-    #energy calculation
+    #################################
+    ########### ENERGY CALCULATION
+    #################################
     
     def nf(self, e, T):
         
@@ -409,7 +405,6 @@ class Dispersion():
         else:
             return np.heaviside(-e,0.5)
         
-    
     def calc_energy_MZ(self,MZ,T, mu):
         T_ev=T*self.hpl.hvkd 
         mu_ev=mu*self.hpl.hvkd 
@@ -426,8 +421,17 @@ class Dispersion():
         plt.close()
         return inte
     
-    
-    
+    def calc_free_energy_MZ(self,MZ,T, mu):
+        T_ev=T*self.hpl.hvkd 
+        mu_ev=mu*self.hpl.hvkd 
+        U=3*self.hpl.hvkd  #to reproduce liang-fu;s calculation
+        # [ppp,Ene_valley_plus_dos]=self.precompute_E_psi_1v(MZ)
+        Ene_valley_plus_dos=self.precompute_E_psi_1v_v2(MZ)
+        Elam=Ene_valley_plus_dos - mu_ev +(MZ*self.hpl.hvkd )**2 /U
+        F=-T_ev*np.sum(np.log(1+np.exp(-Elam/T_ev)))
+        print(MZ, F)
+        return F
+     
     def calc_filling_args_MZ(self,mu, MZ,T, earr, dos_arr):
         T_ev=T*self.hpl.hvkd 
         mu_ev=mu*self.hpl.hvkd 
@@ -436,7 +440,6 @@ class Dispersion():
         # print(MZ, inte)
    
         return inte-self.maxfil/2
-    
     
     def chem_for_filling_lin(self, fill, earr, dos_arr,MZ,T):
         
@@ -491,8 +494,7 @@ class Dispersion():
         plt.close()
         return inte
     
-
-
+    
 def main() -> int:
     ##when we use this main, we are exclusively testing the moire hamiltonian symmetries and methods
     from scipy import linalg as la
@@ -557,19 +559,19 @@ def main() -> int:
     #the lines of code below minimize the mean field hamiltonian
     M_list=[]
     MZ=0.
-    TT=np.linspace(0.01,0.7,20)*BW
+    TT=np.linspace(0.01,0.5,20)
     # TT=[0.001]
     
     for T in TT:
         s=time.time()
-        res=minimize(disp.calc_energy_MZ, MZ, args=(T,mu), method='COBYLA')
+        res=minimize(disp.calc_free_energy_MZ, MZ, args=(T,mu), method='COBYLA')
         e=time.time()
         MZ=res.x
-        M_list.append(MZ)
-        print(T,MZ,disp.calc_energy_MZ( MZ,T, mu ), "time for minimization", e-s)
+        M_list.append(np.abs(MZ))
+        print(T,MZ,disp.calc_free_energy_MZ( MZ,T, mu ), "time for minimization", e-s)
     
-    M=np.array(M_list)/BW
-    T=TT/BW
+    M=np.array(M_list)/2
+    T=TT/2
     plt.plot(T,M)
     plt.scatter(T,M)
     ml=np.max(M)
@@ -578,32 +580,6 @@ def main() -> int:
     plt.savefig("MzT2_7BW.png")
     plt.close()
     
-    
-    
-    # #the lines of code below minimize the mean field hamiltonian
-    # M_list=[]
-    # MZ=0.
-    # TT=np.linspace(0.01,0.25,10)*BW
-    # fil=1
-    
-    # for T in TT:
-    #     s=time.time()
-    #     res=minimize(disp.calc_energy_MZ_fixed_filling, MZ, args=(T,fil), method='COBYLA', options={'maxiter':20})
-    #     e=time.time()
-    #     MZ=res.x
-    #     M_list.append(MZ)
-    #     print(T,MZ,disp.calc_energy_MZ_fixed_filling(MZ,T, fil), "time for minimization", e-s)
-    
-    # M=np.array(M_list)/BW
-    # T=TT/BW
-    # plt.plot(T,M)
-    # plt.scatter(T,M)
-    # ml=np.max(M)
-    # plt.ylim([0-0.02*ml,ml+0.02*ml])
-    
-    # plt.savefig("MzT2fixed.png")
-    # plt.close()
-
             
 if __name__ == '__main__':
     import sys
