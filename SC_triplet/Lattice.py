@@ -4,7 +4,6 @@ from scipy.spatial import Voronoi, voronoi_plot_2d
 from scipy import linalg as la
 import time
 import matplotlib.pyplot as plt
- 
 
 class SquareLattice:
 
@@ -31,8 +30,8 @@ class SquareLattice:
     def __repr__(self):
         return "lattice( LX={w}, twist_angle={c})".format(h=self.Npoints, c=self.normed)
 
-
     #gets high symmetry points
+    
     def FBZ_points(self,b_1,b_2):
         #creating reciprocal lattice
         Np=4
@@ -74,8 +73,8 @@ class SquareLattice:
 
         return Vertices_list, Gamma, M,X
 
-
-    #same as Generate lattice but for the original graphene (FBZ of triangular lattice)
+    #Generate BZ k points
+    
     def Generate_lattice(self):
 
         #initial grid that will be filtered
@@ -85,9 +84,10 @@ class SquareLattice:
 
         KX,KY=np.meshgrid(nn1,nn2)
         
-        return [KX,KY]
+        return [KX.flatten(),KY.flatten()]
     
      #normal linear interpolation to generate samples accross High symmetry points
+     
     def linpam(self,Kps,Npoints_q):
         Npoints=len(Kps)
         t=np.linspace(0, 1, Npoints_q)
@@ -106,13 +106,13 @@ class SquareLattice:
         L=[]
         L=L+[Gamma]+[M[0]]+[X[0]]+[Gamma] ##path in reciprocal space Andrei paper
 
-        Nt_points=40
+        Nt_points=200
         kp_path=self.linpam(L,Nt_points)
         
-        plt.scatter(kp_path[:,0],kp_path[:,1])
-        plt.plot(VV[:,0], VV[:,1])
-        plt.savefig("highSpath.png")
-        plt.close()
+        # plt.scatter(kp_path[:,0],kp_path[:,1])
+        # plt.plot(VV[:,0], VV[:,1])
+        # plt.savefig("highSpath.png")
+        # plt.close()
         
 
         if self.normed==0:
@@ -138,6 +138,7 @@ class SquareLattice:
         return np.array(Vertices_list+[Vertices_list[0]])/Gnorm
     
     #FBZ volume
+    
     def Vol_MBZ(self):
         [GM1,GM2]=self.GMvec
         zhat=np.array([0,0,1])
@@ -147,6 +148,7 @@ class SquareLattice:
         return Vol_rec
     
     #WZ volume
+    
     def Vol_WZ(self):
         [LM1,LM2]=self.LMvec
         zhat=np.array([0,0,1])
