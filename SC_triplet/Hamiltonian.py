@@ -37,10 +37,10 @@ class Ham():
         k=np.array([kx,ky])
         
         ee=(np.exp(1j*k@e1)+np.exp(1j*k@e2))
-        hk=-self.t*np.real(ee)
+        hk=-self.t*np.real(ee)-self.mu
         
         
-        return hk, hk
+        return [hk, hk]
     
     def eigens2(self, kx,ky, Delt=0):
         [GM1,GM2]=self.latt.LMvec
@@ -126,7 +126,28 @@ class Ham():
         dis2=np.sqrt(hk**2 + 2*Delt[0]**2 *(1-2*np.cos(Delt[1])*np.sin(Delt[1])*np.sin(Delt[2])) )
         
         return [-dis1,-dis2,dis2,dis1]
-    
+      
+    def eigens_AFM(self, kx,ky, MZ=0):
+        [GM1,GM2]=self.latt.LMvec
+        
+        MZ_ev=MZ*self.t
+
+        e1=GM1
+        e2=GM2
+        
+        k=np.array([kx,ky])
+        Q=np.array([np.pi,np.pi])
+        
+        ee=(np.exp(1j*k@e1)+np.exp(1j*k@e2))
+        eeQ=(np.exp(1j*(k+Q)@e1)+np.exp(1j*(k+Q)@e2))
+        hk=-self.t*np.real(ee)-self.mu
+        hkQ=-self.t*np.real(eeQ)-self.mu
+        
+        
+        dis1=np.sqrt( 0.25*((hk-hkQ)**2) +MZ_ev**2 )+0.5*(hk+hkQ)
+        dis2=-np.sqrt( 0.25*((hk-hkQ)**2) +MZ_ev**2 )+0.5*(hk+hkQ)
+        
+        return [dis2,dis1,dis1,dis2]
  
 
 class Dispersion():
@@ -144,6 +165,10 @@ class Dispersion():
         [self.KX1bz, self.KY1bz]=latt.Generate_lattice()
         self.Npoi1bz=np.size(self.KX1bz)
         self.latt=latt
+        
+        [self.KX1bz_h, self.KY1bz_h]=latt.Generate_lattice_half()
+        self.Npoi1bz_h=np.size(self.KX1bz_h)
+        
         
         self.maxfil=2
     
@@ -229,6 +254,33 @@ class Dispersion():
         
         return [Ene_valley_plus,Ene_valley_min]
     
+    def precompute_E_psi_half_2v(self,Delt, var_epsilon_pl,var_epsilon_min):
+        
+        Ene_valley_plus_a=np.empty((0))
+        Ene_valley_min_a=np.empty((0))
+
+
+        print("starting dispersion ..........")
+        
+        s=time.time()
+        
+        for l in range(self.Npoi1bz_h):
+            E1=var_epsilon_pl(self.KX1bz_h[l],self.KY1bz_h[l],Delt)
+            Ene_valley_plus_a=np.append(Ene_valley_plus_a,E1)
+            
+            E1=var_epsilon_min(self.KX1bz_h[l],self.KY1bz_h[l],Delt)
+            Ene_valley_min_a=np.append(Ene_valley_min_a,E1)
+
+        
+        e=time.time()
+        print("time to diag over MBZ", e-s)
+        ##relevant wavefunctions and energies for the + valley
+
+        Ene_valley_plus= np.reshape(Ene_valley_plus_a,[self.Npoi1bz_h,self.nbands])
+        Ene_valley_min= np.reshape(Ene_valley_min_a,[self.Npoi1bz_h,self.nbands])
+
+        
+        return [Ene_valley_plus,Ene_valley_min]
     
 
     #################################
@@ -433,7 +485,7 @@ class Dispersion():
 
         Ene_valley_plus= np.reshape(Ene_valley_plus_a,[Npoi,nbands])
     
-        print("the shape of the energy array is",np.shape(Ene_valley_plus))
+        print("the shape of the energy array for High symmetry cut is",np.shape(Ene_valley_plus))
         qa=np.linspace(0,1,Npoi)
         for i in range(nbands):
             plt.plot(qa,Ene_valley_plus[:,i] , c='b')
@@ -467,126 +519,169 @@ class Dispersion():
             return 1/(1+np.exp( e/T ))
         else:
             return np.heaviside(-e,0.5)
-        
-    def calc_free_energy_nsp(self,Delt,T, J):
+    
+    def calc_free_energy_metal(self,Delt,T, J):
         T_ev=T*self.hpl.t 
-        [Ene_valley_plus,Ene_valley_min]=self.precompute_E_psi_2v(Delt,self.hpl.eigens_nsp,self.hmin.eigens_nsp)
-        Elam1=0.5*(Ene_valley_plus +4*(Delt*self.hpl.t )**2 /J)
-        Elam2=0.5*(Ene_valley_min +4*(Delt*self.hmin.t )**2 /J)
+        [Ene_valley_plus,Ene_valley_min]=self.precompute_E_psi_2v(Delt,self.hpl.eigens,self.hmin.eigens)
+        Elam1=Ene_valley_plus
+        Elam2=Ene_valley_min
         F1=-T_ev*np.sum(np.log(1+np.exp(-Elam1/T_ev)))
         F2=-T_ev*np.sum(np.log(1+np.exp(-Elam2/T_ev)))
         F=F1+F2
+        print(Delt, F)
+        return F
+    
+    def calc_zero_energy_metal(self):
+        [Ene_valley_plus,Ene_valley_min]=self.precompute_E_psi_2v(0,self.hpl.eigens,self.hmin.eigens)
+        F=np.sum(Ene_valley_plus+Ene_valley_min)
+        return F
+      
+    def calc_free_energy_nsp(self,Delt,T, J):
+        T_ev=T*self.hpl.t 
+        [Ene_valley_plus,Ene_valley_min]=self.precompute_E_psi_2v(Delt,self.hpl.eigens_nsp,self.hmin.eigens_nsp)
+        Elam1=(Ene_valley_plus[:,int(self.nbands/2):])*0.5
+        Elam2=(Ene_valley_min[:,int(self.nbands/2):])*0.5
+        F1=-T_ev*np.sum(np.log(1+np.exp(-Elam1/T_ev)))
+        F2=-T_ev*np.sum(np.log(1+np.exp(-Elam2/T_ev)))
+        N=np.size(Ene_valley_plus)
+        F=F1+F2+4*N*(Delt*self.hmin.t )**2 /J
         print(Delt, F)
         return F
 
     def calc_free_energy_sp(self,Delt,T, J):
         T_ev=T*self.hpl.t 
         [Ene_valley_plus,Ene_valley_min]=self.precompute_E_psi_2v(Delt,self.hpl.eigens_sp,self.hmin.eigens_sp)
-        Elam1=0.5*(Ene_valley_plus +4*(Delt*self.hpl.t )**2 /J)
-        Elam2=0.5*(Ene_valley_min +4*(Delt*self.hmin.t )**2 /J)
+        Elam1=(Ene_valley_plus[:,int(self.nbands/2):])*0.5
+        Elam2=(Ene_valley_min[:,int(self.nbands/2):])*0.5
         F1=-T_ev*np.sum(np.log(1+np.exp(-Elam1/T_ev)))
         F2=-T_ev*np.sum(np.log(1+np.exp(-Elam2/T_ev)))
-        F=F1+F2
+        N=np.size(Ene_valley_plus)
+        F=F1+F2+4*N*(Delt*self.hmin.t )**2 /J
         print(Delt, F)
         return F
     
     def calc_free_energy_psp(self,Delt,T, J):
         T_ev=T*self.hpl.t 
-        [Ene_valley_plus,Ene_valley_min]=self.precompute_E_psi_2v(Delt,self.hpl.eigens_psp,self.hmin.eigens_psp)
-        Elam1=0.5*(Ene_valley_plus +4*(Delt[0]*self.hpl.t )**2 /J)
-        Elam2=0.5*(Ene_valley_min +4*(Delt[0]*self.hmin.t )**2 /J)
+        # [Ene_valley_plus,Ene_valley_min]=self.precompute_E_psi_2v(Delt,self.hpl.eigens_psp,self.hmin.eigens_psp)
+        [Ene_valley_plus,Ene_valley_min]=self.precompute_E_psi_half_2v(Delt,self.hpl.eigens_psp,self.hmin.eigens_psp)
+        Elam1=Ene_valley_plus
+        Elam2=Ene_valley_min
         F1=-T_ev*np.sum(np.log(1+np.exp(-Elam1/T_ev)))
         F2=-T_ev*np.sum(np.log(1+np.exp(-Elam2/T_ev)))
-        F=F1+F2
+        N=np.size(Ene_valley_plus)
+        F=F1+F2+4*N*(Delt[0]*self.hmin.t )**2 /J
         print(Delt, F)
+        return F
+    
+    def calc_free_energy_AFM(self,MZ,T, J):
+        T_ev=T*self.hpl.t 
+        # [Ene_valley_plus,Ene_valley_min]=self.precompute_E_psi_2v(MZ,self.hpl.eigens_AFM,self.hmin.eigens_AFM)
+        [Ene_valley_plus,Ene_valley_min]=self.precompute_E_psi_half_2v(MZ,self.hpl.eigens_AFM,self.hmin.eigens_AFM)
+        Elam1=Ene_valley_plus
+        Elam2=Ene_valley_min
+        F1=-T_ev*np.sum(np.log(1+np.exp(-Elam1/T_ev)))
+        F2=-T_ev*np.sum(np.log(1+np.exp(-Elam2/T_ev)))
+        N=np.size(Ene_valley_plus) #full BZ
+        F=F1+F2+4*N*(MZ*self.hmin.t )**2 /J
+        print(MZ, F)
         return F
 
 
 
 def main() -> int:
-    Npoints=61
+    Npoints=21
     latt=Lattice.SquareLattice( Npoints,  0)
     [KX,KY]=latt.Generate_lattice()
     print(np.size(KX), Npoints**2)
     
+    ###hamiltonian
     t=1
     nbands=4
-    mu=-1
+    mu=1
     hp=Ham(t,latt,mu)
-    disp=Dispersion(latt,4, hp, hp)
+    disp=Dispersion(latt,nbands, hp, hp)
     
-    Delt=[0.2,0,0]
-    disp.High_symmetry(Delt, hp.eigens_psp)
-    
-
-
+    #test parameters and testing energy calculations
     T=.15
-    J=3
-    Delt=[0.2,0,0]
-    s=time.time()
-    Energy_calc=disp.calc_free_energy_psp(Delt,T, J)
-    e=time.time()
-    print(Energy_calc, "time for energy calc", e-s)
+    J=6
+    
+    dispM=Dispersion(latt,2, hp, hp)
+    Delt=[0.1,0,0]
+    dispM.High_symmetry(Delt, hp.eigens)
+    Delt=[0.0,0,0]
+    Energy_calc=dispM.calc_free_energy_metal(Delt,T, J)
+    print('free energy metal \n',Energy_calc)
+    
+    Delt=[0.1,0,0]
+    disp.High_symmetry(Delt, hp.eigens_psp)
+    Delt=[0.0,0,0]
+    Energy_calc_sc_0=disp.calc_free_energy_psp(Delt,T, J)
+    print('free energy psp \n',Energy_calc_sc_0)
+    
+    MZ=0.0
+    disp.High_symmetry(MZ, hp.eigens_AFM)
+    MZ=0.0
+    Energy_calc_AFM_0=disp.calc_free_energy_AFM(MZ,T, J)
+    print('free energy AFM \n',Energy_calc_AFM_0)
+
+
+
+    
     
     
     #the lines of code below minimize the mean field hamiltonian
     Delt_list=[]
-    Ene_list=[]
-    TT=np.linspace(0.01,0.15,40)
+    MZ_list=[]
+    
+    FEne_psp0_list=[]
+    FEne_psp_list=[]
+    
+    FEne_AFM0_list=[]
+    FEne_AFM_list=[]
+    TT=np.linspace(0.01,0.15,10)
     # TT=[0.001]
     
+    #seed
+    Delt=[0.2,0,0]
+    MZ=0.2
+    J=6
+    
     for T in TT:
+        
+        #zerp values at this T
+        Energy_calc_sc_0=disp.calc_free_energy_psp([0,0,0],T, J)
+        Energy_calc_AFM_0=disp.calc_free_energy_AFM(0,T, J)
+        
+        FEne_psp0_list.append(Energy_calc_sc_0)
+        FEne_AFM0_list.append(Energy_calc_AFM_0)
+        
+        #minimization SC
         s=time.time()
         res=minimize(disp.calc_free_energy_psp, Delt, args=(T, J), method='COBYLA')
-        Deli=res.x
+        Delt=res.x
         Fres=res.fun
         e=time.time()
         
         
-        Delt_list.append(np.abs(Deli))
-        Ene_list.append(Fres)
-        print(T,Deli,Fres, "time for minimization", e-s)
-    
-    D=np.array(Delt_list)
-    Fr=np.array(Ene_list)
-    T=TT
-    plt.plot(T,D[:,0])
-    plt.scatter(T,D[:,0])
-    ml=np.max(D[:,0])
-    mi=np.min(D[:,0])
-    plt.ylim([mi-0.01*mi,ml+0.01*ml])
-    
-    plt.savefig("D_T_"+str(Npoints)+".png")
-    plt.close()
-    
-    
-    plt.plot(T,D[:,1])
-    plt.scatter(T,D[:,1])
-    ml=np.max(D[:,1])
-    mi=np.min(D[:,1])
-    plt.ylim([mi-0.01*mi,ml+0.01*ml])
-    
-    plt.savefig("ph_T_"+str(Npoints)+".png")
-    plt.close()
-    
-    plt.plot(T,D[:,2])
-    plt.scatter(T,D[:,2])
-    ml=np.max(D[:,2])
-    mi=np.min(D[:,2])
-    plt.ylim([mi-0.01*mi,ml+0.01*ml])
-    
-    plt.savefig("th_T_"+str(Npoints)+".png")
-    plt.close()
+        Delt_list.append(np.abs(Delt))
+        FEne_psp_list.append(Fres)
+        
+        #minimization SC
+        s=time.time()
+        res=minimize(disp.calc_free_energy_AFM, MZ, args=(T, J), method='COBYLA')
+        MZ=res.x
+        Fres=res.fun
+        e=time.time()
+        
+        
+        MZ_list.append(np.abs(Delt))
+        FEne_AFM_list.append(Fres)
+
+        print(T,Delt,Fres, "time for minimization", e-s)
     
     
-    plt.plot(T,Fr)
-    plt.scatter(T,Fr)
-    ml=np.max(Fr)
-    mi=np.min(Fr)
-    plt.ylim([mi,ml])
+
     
-    plt.savefig("Fr_T_"+str(Npoints)+".png")
-    plt.close()
     
     
     return 0
@@ -595,6 +690,43 @@ if __name__ == '__main__':
     import sys
     sys.exit(main())  # next section explains the use of sys.exit
 
+    # plt.plot(T,D[:,0])
+    # plt.scatter(T,D[:,0])
+    # ml=np.max(D[:,0])
+    # mi=np.min(D[:,0])
+    # plt.ylim([mi-0.01*mi,ml+0.01*ml])
+    
+    # plt.savefig("D_T_"+str(Npoints)+".png")
+    # plt.close()
+    
+    
+    # plt.plot(T,D[:,1])
+    # plt.scatter(T,D[:,1])
+    # ml=np.max(D[:,1])
+    # mi=np.min(D[:,1])
+    # plt.ylim([mi-0.01*mi,ml+0.01*ml])
+    
+    # plt.savefig("ph_T_"+str(Npoints)+".png")
+    # plt.close()
+    
+    # plt.plot(T,D[:,2])
+    # plt.scatter(T,D[:,2])
+    # ml=np.max(D[:,2])
+    # mi=np.min(D[:,2])
+    # plt.ylim([mi-0.01*mi,ml+0.01*ml])
+    
+    # plt.savefig("th_T_"+str(Npoints)+".png")
+    # plt.close()
+    
+    
+    # plt.plot(T,Fr)
+    # plt.scatter(T,Fr)
+    # ml=np.max(Fr)
+    # mi=np.min(Fr)
+    # plt.ylim([mi,ml])
+    
+    # plt.savefig("Fr_T_"+str(Npoints)+".png")
+    # plt.close()
 
     
     

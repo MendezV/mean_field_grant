@@ -22,7 +22,11 @@ class SquareLattice:
         self.C2z=np.array([[np.cos(th1),np.sin(th1)],[-np.sin(th1),np.cos(th1)]]) #rotation matrix 
         #C4z
         th1=2*np.pi/4
-        self.C3z=np.array([[np.cos(th1),np.sin(th1)],[-np.sin(th1),np.cos(th1)]]) #rotation matrix 
+        self.C4z=np.array([[np.cos(th1),np.sin(th1)],[-np.sin(th1),np.cos(th1)]]) #rotation matrix 
+        
+        #C8z
+        th1=2*np.pi/8
+        self.C8z=np.array([[np.cos(th1),np.sin(th1)],[-np.sin(th1),np.cos(th1)]]) #rotation matrix 
         #C2x inv
         self.C2x=np.array([[1,0],[0,-1]]) #rotation matrix 
         self.VolMBZ=self.Vol_MBZ()
@@ -86,7 +90,20 @@ class SquareLattice:
         
         return [KX.flatten(),KY.flatten()]
     
-     #normal linear interpolation to generate samples accross High symmetry points
+    def Generate_lattice_half(self):
+
+        #initial grid that will be filtered
+        LP=self.Npoints
+        nn1=np.arange(-LP//2,LP//2,1)*np.sqrt(2)*np.pi/LP
+        nn2=np.arange(-LP//2,LP//2,1)*np.sqrt(2)*np.pi/LP
+
+        KXp,KYp=np.meshgrid(nn1,nn2)
+        KX=self.C8z[0,0]*KXp+self.C8z[0,1]*KYp
+        KY=self.C8z[1,0]*KXp+self.C8z[1,1]*KYp
+        
+        return [KX.flatten()[::2],KY.flatten()[::2]]
+    
+    #normal linear interpolation to generate samples accross High symmetry points
      
     def linpam(self,Kps,Npoints_q):
         Npoints=len(Kps)
@@ -164,6 +181,10 @@ def main() -> int:
     plt.scatter(KX,KY)
     plt.show()
     k=sq.High_symmetry_path()
+    
+    [KX,KY]=sq.Generate_lattice_half()
+    plt.scatter(KX,KY)
+    plt.show()
     return 0
 
 if __name__ == '__main__':
