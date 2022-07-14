@@ -9,9 +9,9 @@
 ###########################
 
 #default parameters, one of these is systematically replaced with the values in the parameter_file
-Lattice_size=21
+Lattice_size=31
 mu=0
-J=6
+J=4
 
 
 #needed prerequisites for the run
@@ -23,7 +23,7 @@ pow=$PWD
 param_arr=$(awk -F= '{print $1}' ${parameter_file})
 echo ${param_arr}
 
-jobname="musweep"  #JOBNAME importan to declare -has to be descriptive
+jobname="musweep_narrowmu_${Lattice_size}_${J}"  #JOBNAME importan to declare -has to be descriptive
 
 #General info about the job
 date_in="`date "+%Y-%m-%d-%H-%M-%S"`"
@@ -47,10 +47,10 @@ for param_val in ${param_arr[@]}; do
     cp ${dire_to_mods}Hamiltonian.py  "${dire}"
     cp ${dire_to_mods}Lattice.py  "${dire}"
     cp ${parameter_file}  "${dire}"
-	cp -r dispersions "${dire}"
+
 	#entering the temp directory, running and coming back
 	cd "${dire}"
-	echo "parameters: lattice size" ${Lattice_size} " J " ${J}  " nu "  ${param_val} 
+	echo "parameters: lattice size" ${Lattice_size} " J " ${J}  " nu "  ${param_val} >> output.out
 
 	nohup time python3 -u Hamiltonian.py  ${Lattice_size} ${param_val} ${J} >> output.out &
 	
