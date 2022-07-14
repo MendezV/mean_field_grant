@@ -6,7 +6,7 @@ from parfor import parfor
 from scipy.optimize import minimize
 import time
 from scipy.interpolate import interp1d
-
+import pandas as pd
 
 class Ham():
     def __init__(self, t, latt, mu, rescale=None):
@@ -589,7 +589,33 @@ class Dispersion():
 
 
 def main() -> int:
-    Npoints=21
+    
+    #####
+    # Parameters Diag: samples
+    ####
+    try:
+        Npoints=int(sys.argv[1])
+
+    except (ValueError, IndexError):
+        raise Exception("Input int for the number of k-point samples total kpoints =(arg[2])**2")
+
+    #####
+    # Electron parameters: mu J
+    ####
+    
+    try:
+        mu=float(sys.argv[2]) 
+
+    except (ValueError, IndexError):
+        raise Exception("Input float in the second argument to choose chemical potential for desired filling")
+    
+    try:
+        J=float(sys.argv[3]) 
+
+    except (ValueError, IndexError):
+        raise Exception("Input float in the third argument to choose the interaction strenght J")
+
+
     latt=Lattice.SquareLattice( Npoints,  0)
     [KX,KY]=latt.Generate_lattice()
     print(np.size(KX), Npoints**2)
@@ -597,13 +623,11 @@ def main() -> int:
     ###hamiltonian
     t=1
     nbands=4
-    mu=1
     hp=Ham(t,latt,mu)
     disp=Dispersion(latt,nbands, hp, hp)
     
     #test parameters and testing energy calculations
     T=.15
-    J=6
     
     dispM=Dispersion(latt,2, hp, hp)
     Delt=[0.1,0,0]
@@ -625,12 +649,10 @@ def main() -> int:
     print('free energy AFM \n',Energy_calc_AFM_0)
 
 
-
-    
-    
-    
     #the lines of code below minimize the mean field hamiltonian
     Delt_list=[]
+    phi_list=[]
+    theta_list=[]
     MZ_list=[]
     
     FEne_psp0_list=[]
@@ -663,10 +685,12 @@ def main() -> int:
         e=time.time()
         
         
-        Delt_list.append(np.abs(Delt))
+        Delt_list.append(np.abs(Delt[0]))
+        phi_list.append(np.abs(Delt[1]))
+        theta_list.append(np.abs(Delt[2]))
         FEne_psp_list.append(Fres)
         
-        #minimization SC
+        #minimization AFM
         s=time.time()
         res=minimize(disp.calc_free_energy_AFM, MZ, args=(T, J), method='COBYLA')
         MZ=res.x
@@ -674,15 +698,31 @@ def main() -> int:
         e=time.time()
         
         
-        MZ_list.append(np.abs(Delt))
+        MZ_list.append(np.abs(MZ))
         FEne_AFM_list.append(Fres)
 
         print(T,Delt,Fres, "time for minimization", e-s)
     
     
-
     
+    #saving data
+    Delts=np.array(Delt_list)
+    phis=np.array(phi_list)
+    thets=np.array(theta_list)
+    MZs=np.array(MZ_list)
     
+    FEne_psp0=np.array(FEne_psp_list)
+    FEne_psp=np.array(FEne_psp_list)
+    
+    FEne_AFM0=np.array(FEne_AFM0_list)
+    FEne_AFM=np.array(FEne_AFM_list)
+    
+    one=np.ones(np.size(MZs))
+    
+    # print(np.size(TT),np.size(mu*one),np.size(J*one),np.size(Delts),np.size(phis),np.size(thets),np.size(MZs),np.size(FEne_psp0),np.size(FEne_psp))
+    
+    df = pd.DataFrame({'T':TT, 'mu':mu*one, 'J':J*one,'D':Delts, 'phi':phis,'theta':thets,'MZ':MZs,'FSC0':FEne_psp0,'FSC':FEne_psp,'FAFM0':FEne_AFM0,'FAFM':FEne_AFM})
+    df.to_hdf('data_mu_'+str(mu)+'_J_'+str(J)+'.h5', key='df', mode='w')
     
     return 0
 
