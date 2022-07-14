@@ -169,6 +169,8 @@ class Dispersion():
         [self.KX1bz_h, self.KY1bz_h]=latt.Generate_lattice_half()
         self.Npoi1bz_h=np.size(self.KX1bz_h)
         
+        [self.KX1bz_h2, self.KY1bz_h2]=latt.Generate_lattice_half_2()
+        self.Npoi1bz_h2=np.size(self.KX1bz_h2)
         
         self.maxfil=2
     
@@ -224,8 +226,7 @@ class Dispersion():
 
         
         return Ene_valley_plus
-    
-    
+     
     def precompute_E_psi_2v(self,Delt, var_epsilon_pl,var_epsilon_min):
         
         Ene_valley_plus_a=np.empty((0))
@@ -278,6 +279,34 @@ class Dispersion():
 
         Ene_valley_plus= np.reshape(Ene_valley_plus_a,[self.Npoi1bz_h,self.nbands])
         Ene_valley_min= np.reshape(Ene_valley_min_a,[self.Npoi1bz_h,self.nbands])
+
+        
+        return [Ene_valley_plus,Ene_valley_min]
+    
+    def precompute_E_psi_half_2_2v(self,Delt, var_epsilon_pl,var_epsilon_min):
+        
+        Ene_valley_plus_a=np.empty((0))
+        Ene_valley_min_a=np.empty((0))
+
+
+        print("starting dispersion ..........")
+        
+        s=time.time()
+        
+        for l in range(self.Npoi1bz_h2):
+            E1=var_epsilon_pl(self.KX1bz_h2[l],self.KY1bz_h2[l],Delt)
+            Ene_valley_plus_a=np.append(Ene_valley_plus_a,E1)
+            
+            E1=var_epsilon_min(self.KX1bz_h2[l],self.KY1bz_h2[l],Delt)
+            Ene_valley_min_a=np.append(Ene_valley_min_a,E1)
+
+        
+        e=time.time()
+        print("time to diag over MBZ", e-s)
+        ##relevant wavefunctions and energies for the + valley
+
+        Ene_valley_plus= np.reshape(Ene_valley_plus_a,[self.Npoi1bz_h2,self.nbands])
+        Ene_valley_min= np.reshape(Ene_valley_min_a,[self.Npoi1bz_h2,self.nbands])
 
         
         return [Ene_valley_plus,Ene_valley_min]
@@ -583,12 +612,12 @@ class Dispersion():
     def calc_free_energy_psp(self,Delt,T, J):
         T_ev=T*self.hpl.t 
         # [Ene_valley_plus,Ene_valley_min]=self.precompute_E_psi_2v(Delt,self.hpl.eigens_psp,self.hmin.eigens_psp)
-        [Ene_valley_plus,Ene_valley_min]=self.precompute_E_psi_half_2v(Delt,self.hpl.eigens_psp,self.hmin.eigens_psp)
+        [Ene_valley_plus,Ene_valley_min]=self.precompute_E_psi_half_2_2v(Delt,self.hpl.eigens_psp,self.hmin.eigens_psp)
         Elam1=Ene_valley_plus
         Elam2=Ene_valley_min
         F1=-T_ev*np.sum(np.log(1+np.exp(-Elam1/T_ev)))
         F2=-T_ev*np.sum(np.log(1+np.exp(-Elam2/T_ev)))
-        N=np.size(Ene_valley_plus)*2
+        N=2*np.size(Ene_valley_plus) #full BZ
         F=F1+F2+4*N*(Delt[0]*self.hmin.t )**2 /J
         print(Delt, F)
         return F

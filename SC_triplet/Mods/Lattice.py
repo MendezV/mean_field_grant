@@ -103,6 +103,18 @@ class SquareLattice:
         
         return [KX.flatten()[::2],KY.flatten()[::2]]
     
+    def Generate_lattice_half_2(self):
+
+        #initial grid that will be filtered
+        LP=self.Npoints
+        nn1=np.arange(0,LP//2,1)*2*np.pi/LP
+        nn2=np.arange(-LP//2,LP//2,1)*2*np.pi/LP
+
+        KX,KY=np.meshgrid(nn1,nn2)
+
+        
+        return [KX.flatten(),KY.flatten()]
+    
     #normal linear interpolation to generate samples accross High symmetry points
      
     def linpam(self,Kps,Npoints_q):
@@ -183,6 +195,22 @@ def main() -> int:
     k=sq.High_symmetry_path()
     
     [KX,KY]=sq.Generate_lattice_half()
+    plt.scatter(KX,KY)
+    plt.show()
+    
+    sq=SquareLattice( Npoints,  0)
+    [KX,KY]=sq.Generate_lattice()
+    plt.scatter(KX,KY)
+    
+    [KX,KY]=sq.Generate_lattice_half()
+    plt.scatter(KX,KY)
+    plt.show()
+    
+    sq=SquareLattice( Npoints,  0)
+    [KX,KY]=sq.Generate_lattice()
+    plt.scatter(KX,KY)
+    
+    [KX,KY]=sq.Generate_lattice_half_2()
     plt.scatter(KX,KY)
     plt.show()
     return 0

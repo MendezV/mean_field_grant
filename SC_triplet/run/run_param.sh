@@ -23,7 +23,7 @@ pow=$PWD
 param_arr=$(awk -F= '{print $1}' ${parameter_file})
 echo ${param_arr}
 
-jobname="musweep_narrowmu_${Lattice_size}_${J}"  #JOBNAME importan to declare -has to be descriptive
+jobname="musweep_updt_${Lattice_size}_${J}"  #JOBNAME importan to declare -has to be descriptive
 
 #General info about the job
 date_in="`date "+%Y-%m-%d-%H-%M-%S"`"
