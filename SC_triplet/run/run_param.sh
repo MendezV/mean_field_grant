@@ -9,9 +9,9 @@
 ###########################
 
 #default parameters, one of these is systematically replaced with the values in the parameter_file
-Lattice_size=31
+Lattice_size=51
 mu=0
-J=4
+J=6
 
 
 #needed prerequisites for the run
@@ -23,7 +23,7 @@ pow=$PWD
 param_arr=$(awk -F= '{print $1}' ${parameter_file})
 echo ${param_arr}
 
-jobname="musweep_updt_${Lattice_size}_${J}"  #JOBNAME importan to declare -has to be descriptive
+jobname="musweep_AFMcor_${Lattice_size}_${J}"  #JOBNAME importan to declare -has to be descriptive
 
 #General info about the job
 date_in="`date "+%Y-%m-%d-%H-%M-%S"`"
