@@ -631,7 +631,7 @@ class Dispersion():
         F1=-T_ev*np.sum(np.log(1+np.exp(-Elam1/T_ev)))
         F2=-T_ev*np.sum(np.log(1+np.exp(-Elam2/T_ev)))
         N=2*np.size(Ene_valley_plus) #full BZ
-        F=F1+F2+N*(MZ*self.hmin.t )**2 /J
+        F=F1+F2+4*N*(MZ*self.hmin.t )**2 /J
         print(MZ, F)
         return F
 
@@ -711,7 +711,7 @@ def main() -> int:
     FEne_AFM0_list=[]
     FEne_AFM_list=[]
     # TT=np.linspace(0.005,.04,50)[::-1]
-    TT=np.linspace(0.01,1.0,100)[::-1]
+    TT=np.linspace(0.01,0.5,50)[::-1]
     # TT=[0.001]
     
     #seed

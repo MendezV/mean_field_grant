@@ -711,7 +711,7 @@ def main() -> int:
     FEne_AFM0_list=[]
     FEne_AFM_list=[]
     # TT=np.linspace(0.005,.04,50)[::-1]
-    TT=np.linspace(0.01,1.0,100)[::-1]
+    TT=np.linspace(0.01,0.5,50)[::-1]
     # TT=[0.001]
     
     #seed
